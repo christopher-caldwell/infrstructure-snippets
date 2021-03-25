@@ -1,0 +1,19 @@
+{
+	"name": "graphql-stuff",
+	"version": "1.0.0",
+	"description": "Testing playground",
+	"main": "index.js",
+	"repository": {
+		"type": "git",
+		"url": ""
+	},
+	"scripts": {
+		"deploy:dev": ". ./.env.dev && sh scripts/deploy.sh"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"devDependencies": {
+		"redis": "^3.0.2"
+	}
+}

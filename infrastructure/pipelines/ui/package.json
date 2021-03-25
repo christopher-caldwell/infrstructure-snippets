@@ -1,0 +1,12 @@
+{
+  "name": "jobs-ecr",
+  "version": "1.0.0",
+  "description": "Cloudformation stack to deploy ECR repository",
+  "scripts": {
+    "deploy:dev": ". ./.env.dev && sh scripts/deploy.sh",
+    "deploy:uat": ". ./.env.uat && sh scripts/cf/deploy.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

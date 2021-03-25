@@ -1,0 +1,22 @@
+{
+  "name": "graphql-handler",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "date-fns": "^2.12.0",
+    "graphql": "^14.6.0",
+    "knex": "^0.20.11",
+    "objection": "^2.1.3",
+    "pg": "^7.18.2",
+    "redis": "^3.0.2",
+    "simple-array-shuffler": "0.0.5",
+    "simple-lambda-actions": "^1.2.65"
+  }
+}

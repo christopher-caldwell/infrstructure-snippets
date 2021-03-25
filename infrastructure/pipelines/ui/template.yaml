@@ -1,0 +1,304 @@
+Transform: 'AWS::Serverless-2016-10-31'
+
+Parameters:
+  Stage:
+    Type: String
+  CloudFrontDistributionId:
+    Type: String
+  BranchToRunBuildFrom:
+    Type: String
+  RepositoryUrl:
+    Type: String
+  S3Bucket:
+    Type: String
+    Description: Name of S3 Bucket where the builds will be stored
+  BuildCommand:
+    Type: String
+    Description: Command used to run the build for the specified environment
+  RepositoryName:
+    Type: String
+    Description: Command used to run the build for the specified environment
+  ImageTag:
+    Type: String
+    Description: Command used to run the build for the specified environment
+  UiDeploymentBucket:
+    Type: String
+    Description: Command used to run the build for the specified environment
+  NameOfBuildArtifact:
+    Type: String
+    Description: Command used to run the build for the specified environment
+
+Resources:
+
+  UiHostBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref UiDeploymentBucket
+      VersioningConfiguration:
+        Status: Enabled
+        
+  CloudFrontOriginIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: "origin identity"
+    
+  UiDistribution:
+    DependsOn: CloudFrontOriginIdentity
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !GetAtt UiHostBucket.DomainName
+            Id: !Ref UiHostBucket
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginIdentity}"
+        Enabled: true
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          ForwardedValues:
+            QueryString: False
+          TargetOriginId: !Ref UiHostBucket
+          ViewerProtocolPolicy: allow-all
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  UiBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UiHostBucket
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginIdentity.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: 
+              - !GetAtt UiHostBucket.Arn
+              - !Sub ${UiHostBucket.Arn}/*
+# Role that the UI build will assume
+  UiBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub music-lab-ui-build-role-${Stage}
+      AssumeRolePolicyDocument:
+          Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: cache-invalidation
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                Resource: 
+                  Fn::Join:
+                    - ""
+                    - - "arn:aws:cloudfront::"
+                      - !Ref AWS::AccountId
+                      - ":distribution/"
+                      - !Ref UiDistribution
+        - PolicyName: logs-permissions
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource: '*'
+        - PolicyName: codebuild-permissions
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:CreateReportGroup
+                  - codebuild:CreateReport
+                  - codebuild:UpdateReport
+                  - codebuild:BatchPutTestCases
+                Resource: '*'
+        - PolicyName: !Sub upload-artifact-to-s3-${Stage}
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:aws:s3:::${S3Bucket}
+                  - !Sub arn:aws:s3:::${S3Bucket}/*
+        - PolicyName: !Sub allow-ecr-build-image-pull-${Stage}
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+                
+  UiDeployServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub music-lab-ui-deploy-role-${Stage}
+      AssumeRolePolicyDocument:
+          Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub deploy-to-s3-${Stage}
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:FilterLogEvents
+                  - logs:GetLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:List*
+                  - s3:PutObject*
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+                Resource: 
+                  - !Sub arn:aws:s3:::${S3Bucket}
+                  - !Sub arn:aws:s3:::${S3Bucket}/*
+              - Effect: Allow
+                Action:
+                  - s3:PutObject*
+                Resource: 
+                  - !Sub arn:aws:s3:::${UiDeploymentBucket}
+                  - !Sub arn:aws:s3:::${UiDeploymentBucket}/*
+        - PolicyName: start-code-deploy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codedeploy:CreateDeployment
+                  - codedeploy:GetApplication
+                  - codedeploy:GetApplicationRevision
+                  - codedeploy:GetDeployment
+                  - codedeploy:GetDeploymentConfig
+                  - codedeploy:RegisterApplicationRevision
+                Resource: "*"
+        
+
+#CodeBuild resource that will perform build
+  UiBuildProject:
+    DependsOn: UiHostBucket
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub music-lab-ui-build-${Stage}
+      Description: !Sub "Build steps for ${Stage} UI"
+      ServiceRole: !GetAtt UiBuildServiceRole.Arn
+      Artifacts:
+        Type: S3
+        Location: !Ref S3Bucket
+        EncryptionDisabled: true
+        Packaging: ZIP
+        Name: !Ref NameOfBuildArtifact
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        ImagePullCredentialsType: SERVICE_ROLE
+        Image:
+          Fn::Join:
+            - ""
+            - - !Ref AWS::AccountId
+              - .dkr.ecr.
+              - !Ref AWS::Region
+              - .amazonaws.com/
+              - !Sub ${RepositoryName}:${ImageTag}
+        EnvironmentVariables:
+        - Name: BUILD_COMMAND
+          Value: !Ref BuildCommand
+        - Name: DISTRIBUTION_ID
+          Value: !Ref UiDistribution
+      Source:
+        Type: GITHUB
+        Location: !Ref RepositoryUrl
+        BuildSpec: ui/buildspec.yml
+        Auth:
+          Resource: !ImportValue GitHubCredentials
+          Type: OAUTH
+      TimeoutInMinutes: 10
+      Triggers:
+        Webhook: true
+        FilterGroups:
+          - - Type: EVENT
+              Pattern: PUSH
+            - Type: HEAD_REF
+              Pattern: !Sub ^refs/heads/${BranchToRunBuildFrom}
+            - Type: FILE_PATH
+              Pattern: ui
+      Tags:
+        - Key: env
+          Value: !Ref Stage
+        - Key: service
+          Value: ui
+        - Key: resource
+          Value: CodeBuild
+        - Key: application
+          Value: MusicLab
+        - Key: lob
+          Value: radio
+        - Key: project
+          Value: 2017_iHM_MusicLab
+        - Key: owner
+          Value: ihm-it-musiclab
+          
+  UiBuildPipeline:
+    DependsOn: UiHostBucket
+    Type: AWS::CodePipeline::Pipeline 
+    Properties: 
+      RoleArn: !GetAtt UiDeployServiceRole.Arn
+      Name: ui
+      ArtifactStore:
+        Type: S3
+        Location: !Ref S3Bucket
+      Stages:
+      - Name: Source
+        Actions:
+        - Name: Source
+          ActionTypeId:
+            Category: Source
+            Owner: AWS
+            Provider: S3
+            Version: '1'
+          RunOrder: 1
+          Configuration:
+            PollForSourceChanges: false
+            S3Bucket: !Ref S3Bucket
+            S3ObjectKey: !Ref NameOfBuildArtifact # name of key that is zip file in infra bucket
+          OutputArtifacts:
+          - Name: SourceArtifact
+          InputArtifacts: []
+          Region: us-east-1
+      - Name: Deploy
+        Actions:
+        - Name: Deploy
+          ActionTypeId:
+            Category: Deploy
+            Owner: AWS
+            Provider: S3
+            Version: '1'
+          RunOrder: 1
+          Configuration:
+            BucketName: !Ref UiDeploymentBucket
+            Extract: true
+          OutputArtifacts: []
+          InputArtifacts:
+          - Name: SourceArtifact
+    

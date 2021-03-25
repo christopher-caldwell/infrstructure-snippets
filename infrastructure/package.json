@@ -1,0 +1,12 @@
+{
+  "name": "infrastructure",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "start": "source db/.env.local && source redis/.env.local && docker-compose up",
+		"stop": "docker-compose down"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

@@ -1,0 +1,18 @@
+Transform: 'AWS::Serverless-2016-10-31'
+
+Resources:
+
+# Auth Credentials for GitHub
+  UiBuildProjectCredentials:
+    Type: AWS::CodeBuild::SourceCredential
+    Properties:
+      AuthType: PERSONAL_ACCESS_TOKEN
+      ServerType: GITHUB
+      Token: '{{resolve:secretsmanager:GitHubToken:SecretString:OauthToken}}'
+
+Outputs:
+  GithubCredentials:
+    Value: !Ref UiBuildProjectCredentials
+    Description: Credentials for CodeBuild to access GitHub repositories
+    Export: 
+      Name: GitHubCredentials

@@ -1,0 +1,28 @@
+{
+	"name": "graphql-stuff",
+	"version": "1.0.0",
+	"description": "Testing playground",
+	"main": "index.js",
+	"repository": {
+		"type": "git",
+		"url": ""
+	},
+	"scripts": {
+		"run-containers": "source db/.env.local && source redis/.env.local && docker-compose up",
+		"stop-containers": "docker-compose down",
+		"start": "source .env.local && serverless offline --httpPort 5000",
+		"deploy:dev": ". ./.env.dev && serverless deploy",
+		"clean:dev": ". ./.env.dev && serverless remove"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"devDependencies": {
+		"serverless": "^1.67.3",
+		"serverless-offline": "^6.1.4",
+		"serverless-webpack": "^5.3.1",
+		"webpack": "^4.42.1",
+		"webpack-bundle-analyzer": "^3.6.1",
+		"webpack-merge": "^4.2.2"
+	}
+}

@@ -1,0 +1,11 @@
+{
+  "name": "build-containers",
+  "version": "1.0.0",
+  "description": "Docker container to build UI in CodeBuild",
+  "scripts": {
+    "deploy": ". ./.env && sh scripts/deploy-container.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

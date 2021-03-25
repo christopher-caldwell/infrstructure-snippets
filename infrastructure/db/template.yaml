@@ -1,0 +1,197 @@
+Transform: 'AWS::Serverless-2016-10-31'
+
+Parameters:
+  DatabaseName:
+    Type: String
+    Description: The RDS Aurora Serverless Database Name
+  DatabaseUsername:
+    Type: String
+    Description: The RDS Aurora Serverless Master UserName
+  DatabasePassword:
+    NoEcho: true
+    Type: String
+    Description: The RDS Aurora Serverless Master User Password
+  Stage:
+    Type: String
+
+Resources:
+# KMS
+  DbKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-default-1
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS:
+              Fn::Join:
+              - ''
+              - - 'arn:aws:iam::'
+                - Ref: AWS::AccountId
+                - :root
+          Action: kms:*
+          Resource: '*'
+
+# VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+
+# Subnets
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/25
+      AvailabilityZone: us-east-1a
+
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.128/25
+      AvailabilityZone: us-east-1c
+  
+  DBSubnetGroup: 
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties: 
+      DBSubnetGroupDescription: "DB Subnet"
+      SubnetIds: 
+        - !Ref Subnet1
+        - !Ref Subnet2
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+# Route Table
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  EcsContainerRoute:
+    Type: AWS::EC2::Route
+    DependsOn:
+      - InternetGateway
+      - AttachGateway
+    Properties:
+       RouteTableId: !Ref RouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref InternetGateway
+  
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet1
+      RouteTableId: !Ref RouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet2
+      RouteTableId: !Ref RouteTable
+
+# Security Group
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda ENIs
+      VpcId: !Ref VPC
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SQL access from lambda subnets
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - 
+        IpProtocol: tcp
+        FromPort: 5432
+        ToPort: 5432
+        SourceSecurityGroupId : !Ref LambdaSecurityGroup
+
+# RDS Cluster
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: !Ref DatabaseUsername
+      MasterUserPassword: !Ref DatabasePassword
+      DatabaseName: !Ref DatabaseName
+      KmsKeyId: !Ref DbKmsKey
+      StorageEncrypted: true
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      EnableHttpEndpoint: true
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref RDSSecurityGroup
+      ScalingConfiguration:
+        AutoPause: true
+        MaxCapacity: 4
+        MinCapacity: 2
+        SecondsUntilAutoPause: 300
+
+  AuroraClusterSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: RDSAuroraServerlessMasterSecret
+      Description: This contains the RDS Master user credentials for RDS Aurora Serverless Cluster
+      SecretString: 
+        !Sub |
+          {
+            "username": "${DatabaseUsername}",
+            "password": "${DatabasePassword}",
+            "db_name": "${DatabaseName}"
+          }
+
+Outputs:
+  VpcId:
+    Value: !Ref VPC
+    Description: ID of the default VPC
+    Export:
+      Name: vpc-id
+  DbEndPoint:
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+    Description: Endpoint to connect to RDS
+    Export:
+      Name: 
+        !Sub ${Stage}-DbEndpoint
+  DbSecurityGroupId:
+    Value: !Ref LambdaSecurityGroup
+    Description: Security group for Lambda to access RDS
+    Export:
+      Name: 
+        !Sub SecurityGroupId-${Stage}
+  DbSubnetOne:
+    Value: !Ref Subnet1
+    Description: First subnet for Lambda to access RDS
+    Export:
+      Name: 
+        !Sub ${Stage}-DbSubNetOne
+  DbSubnetTwo:
+    Value: !Ref Subnet2
+    Description: Second subnet for Lambda to access RDS
+    Export:
+      Name: 
+        !Sub ${Stage}-DbSubNetTwo
+  DbName:
+    Value: !Ref DatabaseName
+    Export:
+      Name: 
+        !Sub ${Stage}-DbName
+    Description: Aurora Serverless Postgres Database
+  DbSecretArn:
+    Value: !Ref AuroraClusterSecret
+    Description: Aurora cluster secrets ARN
+    Export:
+      Name: 
+        !Sub ${Stage}-DbSecrets

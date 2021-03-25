@@ -1,0 +1,18 @@
+{
+  "name": "redis-handler",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "knex": "^0.21.1",
+    "pg": "^8.0.2",
+    "redis": "^3.0.2",
+    "simple-lambda-actions": "^1.2.64"
+  }
+}

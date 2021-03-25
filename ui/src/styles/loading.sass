@@ -1,0 +1,60 @@
+$color-alpha: #d30d06
+$color-beta: #000000
+
+.spinner 
+  margin: auto
+  // width: 100px
+  height: 80px
+
+
+.spinner > div 
+  background: $color-alpha
+  height: 100%
+  width: 10px
+  float: left
+  margin: 0 1px
+  animation: stretch 3s infinite
+  animation-timing-function: cubic-bezier(.62,.28,.23,.99)
+
+
+.spinner .r1 
+  animation-delay: -1s
+
+
+.spinner .r2 
+  animation-delay: -.9s
+
+
+.spinner .r3 
+  animation-delay: -.8s
+
+
+.spinner .r4 
+  animation-delay: -.7s
+
+.spinner .r5 
+  animation-delay: -.6s
+
+.spinner .r6
+  animation-delay: -.5s
+
+
+@keyframes stretch 
+  0%, 20%, 49%  
+    transform: scaleY(0.7)
+    background-color: $color-alpha
+  
+  
+  10%  
+    transform: scaleY(1)
+  
+  
+  50%, 70%, 100%  
+    transform: scaleY(0.7)
+    background-color: $color-beta
+  
+  
+  60%  
+    transform: scaleY(1)
+    background-color: $color-beta
+  

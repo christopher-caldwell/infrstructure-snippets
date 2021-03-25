@@ -1,0 +1,52 @@
+Transform: 'AWS::Serverless-2016-10-31'
+
+Parameters:
+  ClusterName:
+    Type: String
+  Stage:
+    Type: String
+
+Resources:
+
+  CacheSubnetGroup:
+    Type: 'AWS::ElastiCache::SubnetGroup'
+    Properties:
+      Description: !Ref 'AWS::StackName'
+      SubnetIds: 
+      - Fn::ImportValue:
+          !Sub ${Stage}-DbSubNetOne
+      - Fn::ImportValue:
+          !Sub ${Stage}-DbSubNetTwo
+      
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Ref 'AWS::StackName'
+      VpcId: !ImportValue vpc-id
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 6379
+        ToPort: 6379
+        SourceSecurityGroupId: 
+          Fn::ImportValue:
+            !Sub SecurityGroupId-${Stage}
+
+  ElasticCacheCluster:
+    Type: 'AWS::ElastiCache::CacheCluster'
+    Properties:
+      ClusterName: !Ref ClusterName
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      AutoMinorVersionUpgrade: true
+      Engine: redis
+      CacheNodeType: cache.t3.micro
+      NumCacheNodes: 1
+      PreferredMaintenanceWindow: sun:23:00-mon:01:30
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroup
+Outputs:
+  CacheEndPoint:
+    Value: !GetAtt ElasticCacheCluster.RedisEndpoint.Address
+    Description: Endpoint to connect to ElastiCache
+    Export:
+      Name: 
+        !Sub ElastiCache-Endpoint-${Stage}

@@ -1,0 +1,11 @@
+{
+  "name": "build-ecr",
+  "version": "1.0.0",
+  "description": "CloudFormation stack to deploy ECR repository",
+  "scripts": {
+    "deploy": ". ./.env && sh scripts/deploy.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
